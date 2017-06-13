@@ -6,6 +6,9 @@ var app = express();
 var logger = require('morgan');
 var low = require('lowdb');
 var _ = require('lodash');
+var fs = require('fs');
+var path = require('path');
+const { URL } = require('url');
 
 app.use(logger('dev'));
 
@@ -29,7 +32,11 @@ server.listen(port, function () {
 
 // database
 const db = low();
-db.defaults({ messages: [], users: [], help: [] }).write(); // init stuff
+db.defaults(
+  { messages: [],
+    users: [],
+    help: [],
+    shares:[] }).write(); // init stuff
 
 // Set help messages collection
 function addHelp(msg) {
@@ -37,9 +44,13 @@ function addHelp(msg) {
 }
 
 addHelp('Prefix all commands with "."');
+addHelp('- .cd [path] view or change directory');
+addHelp('- .copy [source] [dest] copy files');
+addHelp('- .dir: List share contents');
 addHelp('- .help: Display command list');
 addHelp('- .hello: Returns system greeting');
 addHelp('- .name: Get or set your name');
+addHelp('- .share [localpath] [sharename]: Get or set drive share');
 addHelp('- .users: List users online');
 addHelp('- .version: Returns system greeting');
 addHelp('- .whoami: Returns who you are');
@@ -142,6 +153,83 @@ io.on('connection', function (socket) {
       socket.emit('returnmessage', 'You are ' + getCurrentUser(id).value().name);
     });
 
+
+
+    // FILE COMMANDS
+
+    var currentShare = undefined;
+
+    socket.on('cd', function(path) {
+      if (!path) {
+        // return current path
+        if (!currentShare || !currentShare.currentPath) {
+          socket.emit('returnmessage', 'undefined');
+        } else {
+          socket.emit('returnmessage', currentShare.currentPath);
+        }
+      }
+    })
+
+    socket.on('shares', function() {
+      listShares();
+    })
+
+    socket.on('share', function(args) {
+      var arr = args.split(' ');
+      var localpath = arr[0];
+      var sharename = arr[1];
+
+      if (!localpath || !sharename) {
+        console.log('localpath or sharename not set ');
+        console.log(localpath);
+        console.log(sharename);
+
+        // list shares
+        listShares();
+      } else {
+        console.log('setting share');
+
+        // Set share
+        var user = getCurrentUser(id).value();
+
+        // validate localpath
+        //var myFileURL = new URL('file://C:/data'); // maybe someday
+        // TODO: Add support for windows drive letters and absolute urls
+        var pathname = path.join(__dirname, localpath);
+        console.log(pathname);
+        fs.access(pathname, (err) => {
+          if (err) {
+            if (err.code === 'ENOENT') {
+              console.error('myfile does not exist');
+              socket.emit('returnmessage', 'path not found!');
+            }
+          } else {
+            var share = {
+              name: sharename,
+              path: localpath,
+              userid: id
+            }; // TODO: Replace user id with more permanent user public key
+
+            db.get('shares').push(share).write();
+            socket.emit('returnmessage', 'share added!');
+          }
+        });
+      }
+    });
+
+    function listShares() {
+      console.log('listing shares');
+      //var sharecollection = db.get('shares').find({'userid':id});
+      var sharecollection = db.get('shares').value();
+
+      console.log(sharecollection);
+
+      socket.emit('returnmesage', 'shares (' + sharecollection.length + ')');
+      sharecollection.forEach(share => {
+          socket.emit('returnmessage', printShare(share));
+      });
+    }
+
     // Get current user
     function getCurrentUser(id) {
       console.log('Looking for user: ' + id);
@@ -153,6 +241,12 @@ io.on('connection', function (socket) {
     // Save current user
     var user = {
       socket: id
+    }
+
+    // Print share
+    function printShare(share) {
+      var result = share.path + ' ' + share.name + ' ' + share.userid;
+      return result;
     }
 
     db.get('users').push(user).write();
