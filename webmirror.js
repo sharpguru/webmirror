@@ -77,6 +77,8 @@ io.on('connection', function (socket) {
         console.log('user disconnected');
     });
     socket.on('chat', function (msg) {
+        // add username to message
+        msg = '(' + getUserName(id) + ') ' + msg;
         socket.broadcast.emit('chat', msg);
 
         console.log('pushing message: ' + msg);
@@ -156,6 +158,7 @@ io.on('connection', function (socket) {
 
 
     // FILE COMMANDS
+    // These should really be local
 
     var currentShare = undefined;
 
@@ -175,14 +178,13 @@ io.on('connection', function (socket) {
     })
 
     socket.on('share', function(args) {
-      var arr = args.split(' ');
-      var localpath = arr[0];
-      var sharename = arr[1];
+      var localpath = args.name;
+      var sharename = args.pat;
 
       if (!localpath || !sharename) {
-        console.log('localpath or sharename not set ');
-        console.log(localpath);
-        console.log(sharename);
+        // console.log('localpath or sharename not set ');
+        // console.log(localpath);
+        // console.log(sharename);
 
         // list shares
         listShares();
@@ -238,6 +240,11 @@ io.on('connection', function (socket) {
       return user;
     }
 
+    // Get user name
+    function getUserName(userid) {
+      return getCurrentUser(userid).value().name;
+    }
+
     // Save current user
     var user = {
       socket: id
@@ -250,5 +257,5 @@ io.on('connection', function (socket) {
     }
 
     db.get('users').push(user).write();
-    socket.emit('connected', 'You are now connected to ' + ServerInfo);
+    socket.emit('connected', 'You are now connected to ' + ServerInfo, id);
 });
