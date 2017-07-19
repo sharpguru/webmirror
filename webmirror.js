@@ -53,6 +53,7 @@ addHelp('- .name: Get or set your name');
 addHelp('- .share [localpath] [sharename]: Get or set drive share');
 addHelp('- .users: List users online');
 addHelp('- .version: Returns system greeting');
+addHelp('- .whisper [user]: Message specific user');
 addHelp('- .whoami: Returns who you are');
 var helpmessages = db.get('help').value();
 
@@ -147,6 +148,14 @@ io.on('connection', function (socket) {
     socket.on('version', function() {
       socket.emit('returnmessage', ServerInfo);
     })
+
+    socket.on('whisper', function(secret) {
+      console.log('whispering to');
+      console.log(secret.idto);
+      console.log(secret.msg);
+      console.log(id);
+      socket.broadcast.to(secret.idto).emit('chat', secret.msg);
+    });
 
     socket.on('whoami', function(whom) {
       console.log('who ' + whom);
