@@ -9,6 +9,9 @@ var _ = require('lodash');
 var fs = require('fs');
 var path = require('path');
 const { URL } = require('url');
+var uuidv4 = require('uuid/v4');
+
+var names = require('customnames');
 
 app.use(logger('dev'));
 
@@ -31,7 +34,7 @@ server.listen(port, function () {
 
 
 // database
-const db = low();
+const db = low('serverdb.json');
 db.defaults(
   { messages: [],
     users: [],
@@ -43,6 +46,11 @@ function addHelp(msg) {
   db.get('help').push({ msg: msg }).write();
 }
 
+function clearHelp() {
+  db.get('help').remove().write();
+}
+
+clearHelp();
 addHelp('Prefix all commands with "."');
 addHelp('- .cd [path] view or change directory');
 addHelp('- .copy [source] [dest] copy files');
@@ -50,11 +58,13 @@ addHelp('- .dir: List share contents');
 addHelp('- .help: Display command list');
 addHelp('- .hello: Returns system greeting');
 addHelp('- .name: Get or set your name');
+addHelp('- .register [name] [key]: Register with optional name and key');
 addHelp('- .share [localpath] [sharename]: Get or set drive share');
 addHelp('- .users: List users online');
 addHelp('- .version: Returns system greeting');
 addHelp('- .whisper [user]: Message specific user');
 addHelp('- .whoami: Returns who you are');
+
 var helpmessages = db.get('help').value();
 
 console.log(helpmessages);
@@ -62,7 +72,7 @@ console.log(helpmessages);
 
 const uuid = require('uuid');
 
-io.on('connection', function (socket) {
+io.on('connection', function (socket, connectionData) {
     var id = socket.id;
     console.log('User connected: ' + socket.id);
     var collection = db.get('messages').takeRight(10).value();
@@ -182,6 +192,12 @@ io.on('connection', function (socket) {
       }
     })
 
+    socket.on('register', function(data) {
+      console.log('registering....');
+      console.log(data);
+      commandregister(data);
+    })
+
     socket.on('shares', function() {
       listShares();
     })
@@ -228,6 +244,58 @@ io.on('connection', function (socket) {
       }
     });
 
+    function commandregister(data) {
+      console.log("registration data:");
+      console.log(data);
+
+      if (!data || (!data.name && !data.key)) {
+        // console.log( db.get('users').value().length);
+        // console.log(names.count());
+
+        if (names.count() < getUserCount()) {
+          console.log('random users exhausted!');
+          socket.emit('returnmessage', 'What did you say your name is?');
+          socket.disconnect('exit');
+          return;
+        }
+
+        // create user with random name and key
+        var nameisunique = false;
+        var name = "";
+        var key = uuidv4();
+
+        while (!nameisunique) {
+          // create random names like vega22
+          name = names.random()
+            + Math.floor(Math.random() * 9)
+            + Math.floor(Math.random() * 9);
+
+          var user = db.get('users')
+            .find({ 'name': name })
+            .value();
+          console.log(user);
+          if (!user) {
+            nameisunique = true;
+          }
+        }
+        console.log(name);
+      }
+
+      if (data.name && data.key) {
+        // TODO: Verify key
+        name = data.name;
+        key = data.key;
+      }
+
+      var registereduser = {
+        name: name,
+        key: key
+      };
+
+      socket.emit('registered', registereduser);
+      //socket.emit('returnmessage', 'Welcome ' + name);
+    }
+
     function listShares() {
       console.log('listing shares');
       //var sharecollection = db.get('shares').find({'userid':id});
@@ -259,11 +327,33 @@ io.on('connection', function (socket) {
       socket: id
     }
 
+    // Save user
+    function saveUser(socketid, name, key) {
+      db.get('users')
+        .remove({ socket: socketid })
+        .write();
+
+      var user = {
+        socket: id,
+        name: name,
+        key: key
+      }
+      db.get('users').push(user).write();
+    }
+
+    // Get number of users
+    function getUserCount() {
+      return db.get('users').value().length;
+    }
+
     // Print share
     function printShare(share) {
       var result = share.path + ' ' + share.name + ' ' + share.userid;
       return result;
     }
+
+    console.log("Connection Data: ");
+    console.log(connectionData);
 
     db.get('users').push(user).write();
     socket.emit('connected', 'You are now connected to ' + ServerInfo, id);

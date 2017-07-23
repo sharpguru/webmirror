@@ -1,0 +1,12 @@
+{
+  "name": "customnames",
+  "version": "1.0.4",
+  "description": "Get a custom string from the internal list of names, currently these are star names",
+  "main": "customnames.js",
+  "scripts": {
+    "test": "node customnames test",
+    "start": "node customnames test"
+  },
+  "author": "Brian Foote",
+  "license": "ISC"
+}
