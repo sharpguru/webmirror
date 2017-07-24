@@ -75,8 +75,9 @@ const uuid = require('uuid');
 io.on('connection', function (socket, connectionData) {
     var id = socket.id;
     console.log('User connected: ' + socket.id);
-    var collection = db.get('messages').takeRight(10).value();
-    console.log(collection);
+    //var collection = db.get('messages').takeRight(10).value();
+    var collection = [];
+    //console.log(collection);
     //console.log('db state:');
     //console.log(db.getState());
 
@@ -171,7 +172,9 @@ io.on('connection', function (socket, connectionData) {
       console.log('who ' + whom);
       console.log(id);
 
-      socket.emit('returnmessage', 'You are ' + getCurrentUser(id).value().name);
+      var currentusr = getCurrentUser(id).value();
+      var name = (currentusr) ? currentusr.name : "(unknown)";
+      socket.emit('returnmessage', 'You are ' + name);
     });
 
 
@@ -193,8 +196,8 @@ io.on('connection', function (socket, connectionData) {
     })
 
     socket.on('register', function(data) {
-      console.log('registering....');
-      console.log(data);
+      // console.log('registering....');
+      // console.log(data);
       commandregister(data);
     })
 
@@ -245,46 +248,72 @@ io.on('connection', function (socket, connectionData) {
     });
 
     function commandregister(data) {
-      console.log("registration data:");
+      console.log("Registering:");
       console.log(data);
 
-      if (!data || (!data.name && !data.key)) {
-        // console.log( db.get('users').value().length);
-        // console.log(names.count());
+      var nameisunique = false;
+      var name = (data && data.name) ? data.name : "";
+      var key = (data && data.key) ? data.key : uuidv4();
+      var user = null;
 
-        if (names.count() < getUserCount()) {
-          console.log('random users exhausted!');
-          socket.emit('returnmessage', 'What did you say your name is?');
-          socket.disconnect('exit');
-          return;
-        }
+      var haskey = (data && data.key);
+      var hasname = (data && data.name);
+      var keyexists;
+      var loggedin;
 
-        // create user with random name and key
-        var nameisunique = false;
-        var name = "";
-        var key = uuidv4();
+      if (!haskey) {
+        if (!hasname) {
+          // user logging in with no name or key
+          // assign a random name and key
+          name = createRandomUser();
+        } else {
+          // client wants to register with a specific name
+          // Is name unique?
+          user = getUserFromName(name);
+          if (user) {
+            if (user.key != key) {
+              console.log('username already exists');
+              socket.emit('returnmessage', 'Name already in use!');
+              socket.disconnect('exit');
+              return;
+            }
 
-        while (!nameisunique) {
-          // create random names like vega22
-          name = names.random()
-            + Math.floor(Math.random() * 9)
-            + Math.floor(Math.random() * 9);
+            if (user.socket != id) {
+              // disconnect other logged in client if any
+              socket.broadcast.to(user.socket).emit('returnmessage'
+                , 'Another client has connected with your credentials');
+              socket.broadcast.to(user.socket).emit('disconnect', 'exit');
 
-          var user = db.get('users')
-            .find({ 'name': name })
-            .value();
-          console.log(user);
-          if (!user) {
-            nameisunique = true;
+              // remove other client from db
+              db.get('users')
+                .remove({ socket: user.socket })
+                .write();
+            }
           }
         }
-        console.log(name);
-      }
+      } else {
+        // client registering with key
+        user = getUserFromKey(key);
+        if (user) {
+          if (user.name != name) {
+            console.log('invalid key');
+            socket.emit('returnmessage', 'Invalid key!');
+            socket.disconnect('exit');
+            return;
+          }
 
-      if (data.name && data.key) {
-        // TODO: Verify key
-        name = data.name;
-        key = data.key;
+          if (user.socket != id) {
+            // disconnect other logged in client if any
+            socket.broadcast.to(user.socket).emit('returnmessage'
+              , 'Another client has connected with your credentials');
+            socket.broadcast.to(user.socket).emit('disconnect', 'exit');
+
+            // remove other client from db
+            db.get('users')
+              .remove({ socket: user.socket })
+              .write();
+          }
+        }
       }
 
       var registereduser = {
@@ -292,8 +321,41 @@ io.on('connection', function (socket, connectionData) {
         key: key
       };
 
+      saveUser(id, name, key);
+
       socket.emit('registered', registereduser);
-      //socket.emit('returnmessage', 'Welcome ' + name);
+    }
+
+    function createRandomUser() {
+      var nameisunique = false;
+      var name = "";
+      var user = null;
+      var trycount = 0;
+      var maxtries = names.count();
+
+      while (!nameisunique) {
+        // fail after a few tries
+        trycount++;
+
+        if (trycount > maxtries) {
+          console.log('random user naming maxtries exhausted!');
+          socket.emit('returnmessage', 'What did you say your name was?');
+          socket.disconnect('exit');
+          return;
+        }
+
+        // create random names like vega22
+        name = names.random()
+          + Math.floor(Math.random() * 9)
+          + Math.floor(Math.random() * 9);
+
+        user = getUserFromName(name);
+        if (!user) {
+          nameisunique = true;
+        }
+      }
+      // console.log(name);
+      return name;
     }
 
     function listShares() {
@@ -329,6 +391,8 @@ io.on('connection', function (socket, connectionData) {
 
     // Save user
     function saveUser(socketid, name, key) {
+      console.log('saveUser');
+      console.log(socketid, name, key);
       db.get('users')
         .remove({ socket: socketid })
         .write();
@@ -338,13 +402,31 @@ io.on('connection', function (socket, connectionData) {
         name: name,
         key: key
       }
+
       db.get('users').push(user).write();
     }
 
     // Get number of users
     function getUserCount() {
-      return db.get('users').value().length;
+      return db.get('users').size().value();
     }
+
+    function getUserFromName(name) {
+      var user = db.get('users')
+        .find({ 'name': name })
+        .value();
+
+        return user;
+    }
+
+    function getUserFromKey(key) {
+      var user = db.get('users')
+        .find({ 'key': key })
+        .value();
+
+        return user;
+    }
+
 
     // Print share
     function printShare(share) {
@@ -352,8 +434,8 @@ io.on('connection', function (socket, connectionData) {
       return result;
     }
 
-    console.log("Connection Data: ");
-    console.log(connectionData);
+    // console.log("Connection Data: ");
+    // console.log(connectionData);
 
     db.get('users').push(user).write();
     socket.emit('connected', 'You are now connected to ' + ServerInfo, id);
