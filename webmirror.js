@@ -440,3 +440,5 @@ io.on('connection', function (socket, connectionData) {
     db.get('users').push(user).write();
     socket.emit('connected', 'You are now connected to ' + ServerInfo, id);
 });
+
+module.exports = server;
