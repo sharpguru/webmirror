@@ -11,7 +11,7 @@ var path = require('path');
 const { URL } = require('url');
 var uuidv4 = require('uuid/v4');
 
-var names = require('customnames');
+var names = require('./customnames');
 
 app.use(logger('dev'));
 
