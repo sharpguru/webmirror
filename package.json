@@ -1,13 +1,12 @@
 {
   "name": "webmirror",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "webmirror",
   "main": "webmirror.js",
   "author": {
     "name": "mrfoo"
   },
   "dependencies": {
-    "customnames": "file:local_modules\\customnames",
     "express": "^4.15.3",
     "lodash": "^4.17.4",
     "lowdb": "^0.16.2",
