@@ -262,15 +262,18 @@ io.on('connection', function (socket, connectionData) {
       var loggedin;
 
       if (!haskey) {
+        console.log('user has no key');
         if (!hasname) {
           // user logging in with no name or key
           // assign a random name and key
+          console.log('user has no name');
           name = createRandomUser();
         } else {
           // client wants to register with a specific name
           // Is name unique?
           user = getUserFromName(name);
           if (user) {
+            console.log('found user by name: ', user);
             if (user.key != key) {
               console.log('username already exists');
               socket.emit('returnmessage', 'Name already in use!');
@@ -279,6 +282,7 @@ io.on('connection', function (socket, connectionData) {
             }
 
             if (user.socket != id) {
+              console.log('user.socket id does not match, requesting disconnect');
               // disconnect other logged in client if any
               socket.broadcast.to(user.socket).emit('returnmessage'
                 , 'Another client has connected with your credentials');
@@ -293,6 +297,7 @@ io.on('connection', function (socket, connectionData) {
         }
       } else {
         // client registering with key
+        console.log('client registering with key');
         user = getUserFromKey(key);
         if (user) {
           if (user.name != name) {
@@ -302,11 +307,13 @@ io.on('connection', function (socket, connectionData) {
             return;
           }
 
+          console.log(user, id);
           if (user.socket != id) {
+            console.log('user.socket and id do not match, requesting disconnect');
+
             // disconnect other logged in client if any
-            socket.broadcast.to(user.socket).emit('returnmessage'
-              , 'Another client has connected with your credentials');
-            socket.broadcast.to(user.socket).emit('disconnect', 'exit');
+            //socket.broadcast.to(user.socket).emit('returnmessage', 'Another client has connected with your credentials');
+            //socket.broadcast.to(user.socket).emit('disconnect', 'exit');
 
             // remove other client from db
             db.get('users')
@@ -323,6 +330,7 @@ io.on('connection', function (socket, connectionData) {
 
       saveUser(id, name, key);
 
+      console.log('user registered: ', registereduser);
       socket.emit('registered', registereduser);
     }
 
