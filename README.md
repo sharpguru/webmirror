@@ -1,4 +1,4 @@
-﻿# webmirror
+# webmirror
 Hosts communications server for chat and file services over socket.io
 
 ## Features:
